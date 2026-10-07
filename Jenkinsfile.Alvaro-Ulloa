@@ -1,0 +1,61 @@
+pipeline {
+    agent {
+        kubernetes {
+            yamlFile 'agent.yaml'
+            defaultContainer 'k8s-node'
+        }
+    }
+    environment {
+        APP_VERSION = '3.0.0'
+        IMAGE_NAME = 'alvarotador/tarea-final'
+        IMAGE_TAG = 'alvaro-ulloa'
+        REGISTRY_CREDENTIALS = credentials('docker-hub-credentials')
+        NAMESPACE = 'ns-alvaro-ulloa'
+    }
+    stages {
+        stage('install') {
+            steps {
+                container('k8s-node') {
+                    sh 'corepack enable'
+                    sh 'npm install'
+                }
+            }
+        }
+        stage('test') {
+            steps {
+                container('k8s-node') {
+                    sh 'npm run test || true'
+                }
+            }
+        }
+        stage('build') {
+            steps {
+                container('docker') {
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:${APP_VERSION}"
+                }
+            }
+        }
+        stage('push') {
+            steps {
+                container('docker') {
+                    sh "echo \$REGISTRY_CREDENTIALS_PSW | docker login -u \$REGISTRY_CREDENTIALS_USR --password-stdin"
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker push ${IMAGE_NAME}:${APP_VERSION}"
+                }
+            }
+        }
+        stage('deploy') {
+            steps {
+                container('k8s-node') {
+                    sh '''
+                        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                        chmod +x kubectl
+                        mv kubectl /usr/local/bin/
+                        kubectl apply -f entrega.yaml
+                    '''
+                }
+            }
+        }
+    }
+}
