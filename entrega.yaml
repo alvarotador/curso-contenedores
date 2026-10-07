@@ -18,7 +18,7 @@ metadata:
   namespace: ns-alvaro-ulloa
 type: Opaque
 stringData:
-  API_KEY: "secret-key-alvaro-ulloa-12345"
+  API_KEY: "RD2rlq9IZNpMlPlGnwg9dKVf2KVGXasf"
 ---
 apiVersion: apps/v1
 kind: Deployment
