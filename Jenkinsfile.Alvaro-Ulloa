@@ -9,7 +9,6 @@ pipeline {
         APP_VERSION = '3.0.0'
         IMAGE_NAME = 'alvarotador/tarea-final'
         IMAGE_TAG = 'alvaro-ulloa'
-        REGISTRY_CREDENTIALS = credentials('docker-hub-credentials')
         NAMESPACE = 'ns-alvaro-ulloa'
     }
     stages {
@@ -38,10 +37,31 @@ pipeline {
         }
         stage('push') {
             steps {
-                container('docker') {
-                    sh "echo \$REGISTRY_CREDENTIALS_PSW | docker login -u \$REGISTRY_CREDENTIALS_USR --password-stdin"
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker push ${IMAGE_NAME}:${APP_VERSION}"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'docker-hub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    ),
+                    usernamePassword(
+                        credentialsId: 'github-credentials',
+                        usernameVariable: 'GH_USER',
+                        passwordVariable: 'GH_PASS'
+                    )
+                ]) {
+                    container('docker') {
+                        // 1. Push a Docker Hub
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                        sh "docker push ${IMAGE_NAME}:${APP_VERSION}"
+
+                        // 2. Push a GitHub Container Registry (GHCR)
+                        sh "echo \$GH_PASS | docker login ghcr.io -u \$GH_USER --password-stdin"
+                        sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ghcr.io/alvarotador/tarea-final:${IMAGE_TAG}"
+                        sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ghcr.io/alvarotador/tarea-final:${APP_VERSION}"
+                        sh "docker push ghcr.io/alvarotador/tarea-final:${IMAGE_TAG}"
+                        sh "docker push ghcr.io/alvarotador/tarea-final:${APP_VERSION}"
+                    }
                 }
             }
         }
@@ -49,7 +69,7 @@ pipeline {
             steps {
                 container('k8s-node') {
                     sh '''
-			apk add --no-cache curl
+                        apk add --no-cache curl
                         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
                         chmod +x kubectl
                         mv kubectl /usr/local/bin/
